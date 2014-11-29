@@ -1,0 +1,36 @@
+	[Unit]
+	Description=Nginx load balancer etcd registration
+
+	# Requirements
+	Requires=etcd.service
+	Requires=nginx_lb.service
+
+	# Dependency ordering and binding
+	After=etcd.service
+	After=nginx_lb.service
+	BindsTo=nginx_lb.service
+
+	[Service]
+
+	# Get CoreOS environmental variables
+	EnvironmentFile=/etc/environment
+
+	# Start
+	## Test whether service is accessible and then register useful information
+	ExecStart=/bin/bash -c '\
+	  while true; do \
+	    curl -f ${COREOS_PUBLIC_IPV4}:80; \
+	    if [ $? -eq 0 ]; then \
+	      etcdctl set /services/nginx_lb/${COREOS_PUBLIC_IPV4} \'${COREOS_PUBLIC_IPV4}:80\' --ttl 30; \
+	    else \
+	      etcdctl rm /services/nginx_lb/${COREOS_PUBLIC_IPV4}; \
+	    fi; \
+	    sleep 20; \
+	  done'
+
+	# Stop
+ExecStop=/usr/bin/etcdctl rm /services/nginx_lb/${COREOS_PUBLIC_IPV4}
+
+[X-Fleet]
+# Schedule on the same machine as the associated Nginx load balancer service
+X-ConditionMachineOf=nginx_lb.service
